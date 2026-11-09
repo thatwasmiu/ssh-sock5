@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -14,7 +13,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"golang.org/x/term"
@@ -81,7 +79,7 @@ func run(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	stdin := bufio.NewReader(os.Stdin)
+	keys := newKeyboard(os.Stdin)
 	tgt := &target{
 		addr:         net.JoinHostPort(host.HostName, strconv.Itoa(host.Port)),
 		user:         host.User,
@@ -90,13 +88,13 @@ func run(args []string) error {
 		dialTimeout:  dialTimeout,
 		pingInterval: pingInterval,
 		pingTimeout:  pingTimeout,
-		confirm:      func(prompt string) (bool, error) { return confirm(stdin, prompt) },
+		confirm:      keys.confirm,
 	}
 	sup := &supervisor{
 		name:      hostAlias,
 		connect:   tgt.connect,
 		log:       logLine,
-		sleep:     sleepContext,
+		sleep:     keys.sleep,
 		minUptime: minUptime,
 	}
 	go serveSOCKS(listener, sup.Dial)
@@ -132,14 +130,4 @@ func readPassphrase(prompt string) ([]byte, error) {
 	fmt.Print(prompt)
 	defer fmt.Println()
 	return term.ReadPassword(fd)
-}
-
-func confirm(in *bufio.Reader, prompt string) (bool, error) {
-	fmt.Printf("%s [y/N]: ", prompt)
-	answer, err := in.ReadString('\n')
-	if err != nil && answer == "" {
-		return false, err
-	}
-	answer = strings.ToLower(strings.TrimSpace(answer))
-	return answer == "y" || answer == "yes", nil
 }

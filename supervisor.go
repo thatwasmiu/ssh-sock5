@@ -49,7 +49,7 @@ func (s *supervisor) Run(ctx context.Context) error {
 			}
 			failures++
 			delay := backoffDelay(failures)
-			s.log(fmt.Sprintf("retry %d failed (%s), next in %s", failures, reason(err), delay))
+			s.log(fmt.Sprintf("retry %d failed (%s), next in %s, press Enter to retry now", failures, reason(err), delay))
 			if !s.sleep(ctx, delay) {
 				return nil
 			}
@@ -108,17 +108,6 @@ func backoffDelay(attempt int) time.Duration {
 		delay *= 2
 	}
 	return min(delay, maxBackoff)
-}
-
-func sleepContext(ctx context.Context, d time.Duration) bool {
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		return true
-	case <-ctx.Done():
-		return false
-	}
 }
 
 // reason turns a connection error into a few plain words.

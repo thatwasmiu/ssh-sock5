@@ -156,7 +156,7 @@ func TestSupervisorRetriesUntilConnected(t *testing.T) {
 	}
 	assertLines(t, s.output(),
 		"retry 1 failed (no route), next in 2s",
-		"retry 2 failed (no route), next in 4s",
+		"retry 2 failed (no route), next in 4s, press Enter to retry now",
 		"connected to green after 3 attempts",
 	)
 	if len(s.sleeps) != 2 || s.sleeps[0] != 2*time.Second || s.sleeps[1] != 4*time.Second {

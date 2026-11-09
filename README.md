@@ -58,10 +58,12 @@ green checks the connection every 10 seconds and retries forever, waiting up to 
 
 ```
 10:41:37  connection lost
-10:41:39  retry 1 failed (network unreachable), next in 2s
-10:41:41  retry 2 failed (network unreachable), next in 4s
+10:41:39  retry 1 failed (network unreachable), next in 2s, press Enter to retry now
+10:41:41  retry 2 failed (network unreachable), next in 4s, press Enter to retry now
 10:41:45  connected to green after 3 attempts
 ```
+
+Press Enter during a wait to skip it and retry right away.
 
 The proxy port stays open during an outage, so you don't need to reconfigure anything. Requests fail until the tunnel is back, and anything already in progress, like a download, has to restart.
 
