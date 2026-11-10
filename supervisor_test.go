@@ -84,6 +84,13 @@ type script struct {
 	lines  []string
 	sleeps []time.Duration
 	calls  int
+	clears []int // how many connects had happened at each discard
+}
+
+func (s *script) discardKeys() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clears = append(s.clears, s.calls)
 }
 
 func (s *script) connect(ctx context.Context) (session, error) {
@@ -117,7 +124,7 @@ func (s *script) output() []string {
 }
 
 func (s *script) supervisor() *supervisor {
-	return &supervisor{name: "green", connect: s.connect, log: s.log, sleep: s.sleep, minUptime: time.Minute}
+	return &supervisor{name: "green", connect: s.connect, log: s.log, sleep: s.sleep, discardKeys: s.discardKeys, minUptime: time.Minute}
 }
 
 func fail(msg string) func() (session, error) {
@@ -149,14 +156,16 @@ func TestSupervisorRetriesUntilConnected(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- sup.Run(ctx) }()
 
-	waitFor(t, func() bool { return len(s.output()) == 3 })
+	waitFor(t, func() bool { return len(s.output()) == 5 })
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatalf("Run after cancel: %v", err)
 	}
 	assertLines(t, s.output(),
 		"retry 1 failed (no route), next in 2s",
+		"retrying now...",
 		"retry 2 failed (no route), next in 4s, press Enter to retry now",
+		"retrying now...",
 		"connected to green after 3 attempts",
 	)
 	if len(s.sleeps) != 2 || s.sleeps[0] != 2*time.Second || s.sleeps[1] != 4*time.Second {
@@ -176,11 +185,11 @@ func TestSupervisorReconnectsAfterLoss(t *testing.T) {
 
 	waitFor(t, func() bool { return len(s.output()) == 1 })
 	first.kill()
-	waitFor(t, func() bool { return len(s.output()) == 3 })
+	waitFor(t, func() bool { return len(s.output()) == 4 })
 	cancel()
 	<-done
 
-	assertLines(t, s.output(), "connected to green", "connection lost", "connected to green")
+	assertLines(t, s.output(), "connected to green", "connection lost", "retrying now...", "connected to green")
 	select {
 	case <-first.closed:
 	default:
@@ -198,18 +207,31 @@ func TestSupervisorResetsRetryCountAfterSuccess(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- sup.Run(ctx) }()
 
-	waitFor(t, func() bool { return len(s.output()) == 2 })
+	waitFor(t, func() bool { return len(s.output()) == 3 })
 	first.kill()
-	waitFor(t, func() bool { return len(s.output()) == 5 })
+	waitFor(t, func() bool { return len(s.output()) == 8 })
 	cancel()
 	<-done
 	assertLines(t, s.output(),
 		"retry 1 failed (x)",
+		"retrying now...",
 		"connected to green after 2 attempts",
 		"connection lost",
+		"retrying now...",
 		"retry 1 failed (y), next in 2s",
+		"retrying now...",
 		"connected to green after 2 attempts",
 	)
+}
+
+func TestSupervisorDiscardsKeysBeforeEachAttempt(t *testing.T) {
+	s := &script{steps: []func() (session, error){fail("x"), fail("y")}}
+	if err := s.supervisor().Run(context.Background()); err == nil {
+		t.Fatal("expected the script's fatal error")
+	}
+	if len(s.clears) != 3 || s.clears[0] != 0 || s.clears[1] != 1 || s.clears[2] != 2 {
+		t.Fatalf("clears = %v, want [0 1 2]", s.clears)
+	}
 }
 
 func TestSupervisorStopsOnFatalError(t *testing.T) {
@@ -235,7 +257,7 @@ func TestSupervisorPausesWhenSessionDiesQuickly(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- sup.Run(ctx) }()
-	waitFor(t, func() bool { return len(s.output()) == 3 })
+	waitFor(t, func() bool { return len(s.output()) == 4 })
 	cancel()
 	<-done
 	if len(s.sleeps) != 1 || s.sleeps[0] != 2*time.Second {

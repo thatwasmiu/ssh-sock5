@@ -96,6 +96,8 @@ func run(args []string) error {
 		log:       logLine,
 		sleep:     keys.sleep,
 		minUptime: minUptime,
+
+		discardKeys: keys.discard,
 	}
 	go serveSOCKS(listener, sup.Dial)
 

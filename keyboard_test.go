@@ -55,15 +55,34 @@ func TestSleepRunsFullDurationWithoutInput(t *testing.T) {
 	}
 }
 
-func TestSleepIgnoresEnterPressedBeforeTheWait(t *testing.T) {
+func TestSleepSkippedByEnterPressedDuringTheAttempt(t *testing.T) {
 	k, w := newTestKeyboard(t)
 	pressEnterAndWaitForBuffer(t, k, w)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if !k.sleep(ctx, time.Hour) {
+		t.Fatal("Enter pressed before the wait did not skip it")
+	}
+}
+
+func TestDiscardDropsEarlierPresses(t *testing.T) {
+	k, w := newTestKeyboard(t)
+	pressEnterAndWaitForBuffer(t, k, w)
+
+	k.discard()
 	start := time.Now()
 	k.sleep(context.Background(), 150*time.Millisecond)
 	if elapsed := time.Since(start); elapsed < 130*time.Millisecond {
-		t.Fatalf("an old key press cut the wait to %v", elapsed)
+		t.Fatalf("a discarded key press cut the wait to %v", elapsed)
 	}
+}
+
+func TestDiscardReturnsWhenInputClosed(t *testing.T) {
+	k, w := newTestKeyboard(t)
+	w.Close()
+	time.Sleep(20 * time.Millisecond) // let the pump see the close
+	k.discard()
 }
 
 func TestSleepReturnsFalseOnCancel(t *testing.T) {

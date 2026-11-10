@@ -27,6 +27,10 @@ type supervisor struct {
 	sleep     func(context.Context, time.Duration) bool
 	minUptime time.Duration // a session shorter than this pauses before reconnecting
 
+	// discardKeys runs before each attempt, so Enter pressed during an attempt
+	// skips the next wait but one pressed while connected does not.
+	discardKeys func()
+
 	mu      sync.RWMutex
 	current session
 }
@@ -34,7 +38,11 @@ type supervisor struct {
 // Run returns nil once ctx is cancelled, or the fatal error that stopped it.
 func (s *supervisor) Run(ctx context.Context) error {
 	failures := 0
-	for {
+	for attempt := 0; ; attempt++ {
+		if attempt > 0 {
+			s.log("retrying now...")
+		}
+		s.discardKeys()
 		sess, err := s.connect(ctx)
 		if ctx.Err() != nil {
 			if sess != nil {

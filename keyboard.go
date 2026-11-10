@@ -30,23 +30,24 @@ func (k *keyboard) pump(r io.Reader) {
 	close(k.lines)
 }
 
-// sleep waits for d or until Enter is pressed during the wait. It returns
-// false only if ctx is cancelled.
-func (k *keyboard) sleep(ctx context.Context, d time.Duration) bool {
-	lines := k.lines
-drain:
+// discard drops key presses made so far.
+func (k *keyboard) discard() {
 	for {
 		select {
-		case _, ok := <-lines:
+		case _, ok := <-k.lines:
 			if !ok {
-				lines = nil
-				break drain
+				return
 			}
 		default:
-			break drain
+			return
 		}
 	}
+}
 
+// sleep waits for d or until Enter is pressed, counting presses made since the
+// last discard. It returns false only if ctx is cancelled.
+func (k *keyboard) sleep(ctx context.Context, d time.Duration) bool {
+	lines := k.lines
 	timer := time.NewTimer(d)
 	defer timer.Stop()
 	for {
