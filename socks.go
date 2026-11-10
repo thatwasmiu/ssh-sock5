@@ -61,6 +61,7 @@ func handleSOCKS(client net.Conn, dial dialFunc) {
 		socksReply(client, code)
 		return
 	}
+	logLine("connect " + addr)
 
 	remote, err := dial("tcp", addr)
 	if err != nil {
